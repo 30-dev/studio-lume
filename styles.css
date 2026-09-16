@@ -25,6 +25,13 @@ html.is-loading, html.is-loading body{
    corrupt its cached trigger positions against the real document height. */
 html.overlay-open, html.overlay-open body{
   overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html.overlay-open::-webkit-scrollbar,
+html.overlay-open body::-webkit-scrollbar{
+  display: none;
 }
 
 body{
@@ -426,8 +433,8 @@ body.has-custom-cursor .cursor.is-active{ opacity: 1; }
 .hero-visual{
   position: relative;
   flex: 0 0 auto;
-  width: clamp(240px, 27vw, 380px);
-  height: clamp(300px, 32vw, 460px);
+  width: clamp(260px, 30vw, 400px);
+  height: clamp(340px, 38vw, 500px);
 }
 
 .hero-thumb{
@@ -445,9 +452,21 @@ body.has-custom-cursor .cursor.is-active{ opacity: 1; }
 .hero-thumb-primary{
   top: 0;
   right: 0;
-  width: 82%;
+  width: 78%;
   aspect-ratio: 4 / 5;
   z-index: 1;
+  opacity: 0;
+}
+
+.hero-thumb-tertiary{
+  top: 0;
+  left: 0;
+  width: 30%;
+  aspect-ratio: 1 / 1;
+  z-index: 3;
+  border: 5px solid var(--bg);
+  box-shadow: 0 18px 34px rgba(27,26,23,0.18);
+  opacity: 0;
 }
 
 .hero-thumb-secondary{
@@ -458,6 +477,14 @@ body.has-custom-cursor .cursor.is-active{ opacity: 1; }
   z-index: 2;
   border: 5px solid var(--bg);
   box-shadow: 0 24px 44px rgba(27,26,23,0.2);
+  opacity: 0;
+}
+
+.no-js .hero-thumb-primary,
+.no-js .hero-thumb-secondary,
+.no-js .hero-thumb-tertiary{
+  opacity: 1;
+  transform: none;
 }
 
 .hero-thumb img{
@@ -515,6 +542,14 @@ body.has-custom-cursor .cursor.is-active{ opacity: 1; }
 .hero-thumb:hover .hero-thumb-caption{
   opacity: 1;
   transform: translateY(0);
+}
+
+.hero-thumb-tertiary .hero-thumb-caption{
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  font-size: 10.5px;
+  line-height: 1.3;
 }
 
 /* ---------- Statement ---------- */
@@ -903,6 +938,17 @@ body.has-custom-cursor .cursor.is-active{ opacity: 1; }
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  /* Still scrolls on long descriptions, just without a visible track —
+     the overlay reads as one clean surface rather than a scroll pane. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Stop scroll from chaining to whatever's behind the overlay once this
+     column hits its own top/bottom edge. */
+  overscroll-behavior: contain;
+}
+
+.case-col-left::-webkit-scrollbar{
+  display: none;
 }
 
 .case-close{
@@ -1126,6 +1172,13 @@ body.has-custom-cursor .cursor.is-active{ opacity: 1; }
   .case-overlay-inner{
     flex-direction: column;
     overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior: contain;
+  }
+
+  .case-overlay-inner::-webkit-scrollbar{
+    display: none;
   }
 
   .case-col-left, .case-col-right{

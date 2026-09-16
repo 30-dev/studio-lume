@@ -11,6 +11,11 @@
 
   if (hasGsap) gsap.registerPlugin(ScrollTrigger);
 
+  // Guards the hero thumbnails' mouse/scroll parallax from fighting the
+  // entrance cascade below: both animate the same GSAP `y` property, so if
+  // the cursor moves mid-cascade, parallax would otherwise cut it short.
+  var heroEntranceDone = false;
+
   /* ================= Project data (work-grid + hero thumbs + case overlay) ================= */
   var PROJECTS = {
     'alder-house': {
@@ -103,27 +108,110 @@
       var cue = document.querySelector('.scroll-cue');
       if (sub) { sub.style.opacity = 1; sub.style.transform = 'none'; }
       if (cue) { cue.style.opacity = 1; }
+      document.querySelectorAll('.hero-thumb').forEach(function (el) {
+        el.style.opacity = 1;
+        el.style.transform = 'none';
+      });
+      heroEntranceDone = true;
       return;
     }
 
-    var tl = gsap.timeline();
-    tl.to('.reveal-word > span', {
-      y: '0%',
-      duration: 1,
-      ease: 'power4.out',
-      stagger: 0.045
+    function revealText() {
+      var tl = gsap.timeline();
+      tl.to('.reveal-word > span', {
+        y: '0%',
+        duration: 1,
+        ease: 'power4.out',
+        stagger: 0.045
+      });
+      tl.to('.hero-subhead', {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        ease: 'power3.out'
+      }, '-=0.55');
+      tl.to('.scroll-cue', {
+        opacity: 1,
+        duration: 0.6,
+        ease: 'power2.out'
+      }, '-=0.3');
+      tl.eventCallback('onComplete', function () {
+        heroEntranceDone = true;
+      });
+    }
+
+    runHeroImageIntro(revealText);
+  }
+
+  /* ================= Hero image intro: fullscreen -> shrink into place ================= */
+  // Each hero thumbnail takes over the full viewport in turn, then shrinks
+  // (FLIP-style: capture the natural final box, start transformed to fill
+  // the screen, animate the transform back to identity) into its real
+  // position, revealing the next fullscreen image behind it. Runs once,
+  // right after the preloader, before the headline text appears.
+  function runHeroImageIntro(onComplete) {
+    var thumbs = [
+      document.querySelector('.hero-thumb-primary'),
+      document.querySelector('.hero-thumb-secondary'),
+      document.querySelector('.hero-thumb-tertiary')
+    ];
+
+    if (window.innerWidth <= 900 || thumbs.indexOf(null) !== -1) {
+      thumbs.forEach(function (el) {
+        if (el) { el.style.opacity = 1; }
+      });
+      onComplete();
+      return;
+    }
+
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var rects = thumbs.map(function (el) { return el.getBoundingClientRect(); });
+
+    thumbs.forEach(function (el, i) {
+      var r = rects[i];
+      // Uniform scale (not separate X/Y) so the photo covers the viewport
+      // without stretching, same idea as object-fit: cover; centered so
+      // any overflow crops evenly on both sides.
+      var scale = Math.max(vw / r.width, vh / r.height);
+      var tx = (vw - r.width * scale) / 2 - r.left;
+      var ty = (vh - r.height * scale) / 2 - r.top;
+
+      gsap.set(el, {
+        position: 'fixed',
+        top: r.top,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+        transformOrigin: '0 0',
+        x: tx,
+        y: ty,
+        scale: scale,
+        opacity: 1,
+        zIndex: 600 - i
+      });
     });
-    tl.to('.hero-subhead', {
-      opacity: 1,
-      y: 0,
-      duration: 0.8,
-      ease: 'power3.out'
-    }, '-=0.55');
-    tl.to('.scroll-cue', {
-      opacity: 1,
-      duration: 0.6,
-      ease: 'power2.out'
-    }, '-=0.4');
+
+    var tl = gsap.timeline({
+      onComplete: function () {
+        thumbs.forEach(function (el) {
+          gsap.set(el, { clearProps: 'position,top,left,width,height,zIndex,transform,transformOrigin' });
+        });
+        onComplete();
+      }
+    });
+
+    var stepDuration = 0.85;
+    var stepGap = 1.15;
+    thumbs.forEach(function (el, i) {
+      tl.to(el, {
+        x: 0,
+        y: 0,
+        scale: 1,
+        duration: stepDuration,
+        ease: 'power3.inOut'
+      }, i * stepGap);
+    });
   }
 
   /* ================= Post-load: scroll, reveals, cursor, magnetic ================= */
@@ -148,7 +236,14 @@
         lerp: 0.11,
         smoothWheel: true,
         wheelMultiplier: 1,
-        touchMultiplier: 1.2
+        touchMultiplier: 1.2,
+        // Let native scrolling take over inside the case-study overlay's
+        // own scrollable regions — Lenis otherwise hijacks every wheel
+        // event globally (even while stopped), which would make that
+        // inner content unscrollable rather than just locking the page.
+        prevent: function (node) {
+          return !!(node && node.closest && node.closest('.case-col-left, .case-overlay-inner'));
+        }
       });
 
       if (hasGsap) {
@@ -415,28 +510,58 @@
     var hero = document.querySelector('.hero');
     var primary = document.querySelector('.hero-thumb-primary');
     var secondary = document.querySelector('.hero-thumb-secondary');
-    if (!hero || !primary || !secondary) return;
+    var tertiary = document.querySelector('.hero-thumb-tertiary');
+    if (!hero || !primary || !secondary || !tertiary) return;
 
-    var pXTo = gsap.quickTo(primary, 'x', { duration: 0.6, ease: 'power3' });
-    var pYTo = gsap.quickTo(primary, 'y', { duration: 0.6, ease: 'power3' });
-    var sXTo = gsap.quickTo(secondary, 'x', { duration: 0.6, ease: 'power3' });
-    var sYTo = gsap.quickTo(secondary, 'y', { duration: 0.6, ease: 'power3' });
+    var pXTo = gsap.quickTo(primary, 'x', { duration: 0.5, ease: 'power3' });
+    var pYTo = gsap.quickTo(primary, 'y', { duration: 0.5, ease: 'power3' });
+    var sXTo = gsap.quickTo(secondary, 'x', { duration: 0.5, ease: 'power3' });
+    var sYTo = gsap.quickTo(secondary, 'y', { duration: 0.5, ease: 'power3' });
+    var tXTo = gsap.quickTo(tertiary, 'x', { duration: 0.5, ease: 'power3' });
+    var tYTo = gsap.quickTo(tertiary, 'y', { duration: 0.5, ease: 'power3' });
+
+    // Two layers combine additively into the same x/y tween: mouse-move
+    // tilt (relX/relY) and scroll depth (scrollT, 0 at the top of the hero
+    // to 1 once it's scrolled past). Each thumb reacts at a different rate
+    // so the cluster reads as layered rather than moving as one flat image.
+    var relX = 0;
+    var relY = 0;
+    var scrollT = 0;
+
+    function applyParallax() {
+      if (!heroEntranceDone) return;
+      pXTo(relX * 26);
+      pYTo(relY * 20 + scrollT * -34);
+      sXTo(relX * -42 + scrollT * 20);
+      sYTo(relY * -32 + scrollT * 58);
+      // Smallest, topmost thumb reads as closest to the viewer, so it gets
+      // the strongest parallax swing — same direction as the cursor.
+      tXTo(relX * 52);
+      tYTo(relY * 40 + scrollT * -72);
+    }
 
     hero.addEventListener('mousemove', function (e) {
       var rect = hero.getBoundingClientRect();
-      var relX = (e.clientX - rect.left) / rect.width - 0.5;
-      var relY = (e.clientY - rect.top) / rect.height - 0.5;
-      pXTo(relX * 10);
-      pYTo(relY * 8);
-      sXTo(relX * -16);
-      sYTo(relY * -12);
+      relX = (e.clientX - rect.left) / rect.width - 0.5;
+      relY = (e.clientY - rect.top) / rect.height - 0.5;
+      applyParallax();
     });
 
     hero.addEventListener('mouseleave', function () {
-      pXTo(0);
-      pYTo(0);
-      sXTo(0);
-      sYTo(0);
+      relX = 0;
+      relY = 0;
+      applyParallax();
+    });
+
+    ScrollTrigger.create({
+      trigger: hero,
+      start: 'top top',
+      end: 'bottom top',
+      scrub: true,
+      onUpdate: function (self) {
+        scrollT = self.progress;
+        applyParallax();
+      }
     });
   }
 
@@ -460,6 +585,65 @@
     var lastTrigger = null;
     var isOpen = false;
 
+    // `overflow: hidden` on html/body hides the scrollbar and blocks most
+    // user-driven scrolling, but it does not reliably stop every scroll
+    // vector here (Lenis's own wheel handling, and some browsers still let
+    // wheel deltas over non-scrollable overlay regions bubble to the
+    // document). Belt-and-suspenders: intercept wheel/touch directly while
+    // the overlay is open, letting a genuinely scrollable region *inside*
+    // the overlay scroll through untouched and swallowing everything else.
+    // Checked dynamically (not a hardcoded selector) because which element
+    // actually scrolls differs by breakpoint: the text column on desktop,
+    // the whole stacked overlay on mobile.
+    function findScrollableAncestor(el) {
+      while (el && el !== document.body && el !== document.documentElement) {
+        if (el.nodeType === 1) {
+          var oy = getComputedStyle(el).overflowY;
+          if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+        }
+        el = el.parentNode;
+      }
+      return null;
+    }
+
+    function isWithinScrollableOverlayRegion(target) {
+      var scrollable = findScrollableAncestor(target);
+      return !!(scrollable && overlay.contains(scrollable));
+    }
+
+    function isScrollKey(e) {
+      return ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar'].indexOf(e.key) !== -1;
+    }
+
+    function blockWheel(e) {
+      if (isWithinScrollableOverlayRegion(e.target)) return;
+      e.preventDefault();
+    }
+
+    function blockTouchMove(e) {
+      if (isWithinScrollableOverlayRegion(e.target)) return;
+      e.preventDefault();
+    }
+
+    function blockScrollKeys(e) {
+      var target = e.target;
+      var isFormField = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+      if (isFormField || isWithinScrollableOverlayRegion(target)) return;
+      if (isScrollKey(e)) e.preventDefault();
+    }
+
+    function lockBackgroundScroll() {
+      document.addEventListener('wheel', blockWheel, { passive: false });
+      document.addEventListener('touchmove', blockTouchMove, { passive: false });
+      document.addEventListener('keydown', blockScrollKeys, { passive: false });
+    }
+
+    function unlockBackgroundScroll() {
+      document.removeEventListener('wheel', blockWheel, { passive: false });
+      document.removeEventListener('touchmove', blockTouchMove, { passive: false });
+      document.removeEventListener('keydown', blockScrollKeys, { passive: false });
+    }
+
     function populate(id) {
       var data = PROJECTS[id];
       if (!data) return false;
@@ -482,6 +666,7 @@
 
       html.classList.add('overlay-open');
       if (lenis) lenis.stop();
+      lockBackgroundScroll();
       if (navEl) navEl.classList.add('is-hidden');
 
       overlay.classList.add('is-open');
@@ -519,6 +704,7 @@
         overlay.classList.remove('is-open');
         overlay.setAttribute('aria-hidden', 'true');
         html.classList.remove('overlay-open');
+        unlockBackgroundScroll();
         if (navEl) navEl.classList.remove('is-hidden');
         isOpen = false;
 
